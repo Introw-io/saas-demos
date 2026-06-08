@@ -1,4 +1,5 @@
 import Sidebar from "../Sidebar";
+import { resolveUserContext } from "./userContext";
 
 export const dynamic = "force-dynamic";
 
@@ -9,14 +10,18 @@ async function getSessionUrl(): Promise<string | null> {
     return null;
   }
 
-  const body = new URLSearchParams();
-  body.append("email", "embed@introw.io");
+  const userContext = await resolveUserContext();
+  if (!userContext) {
+    console.error("failed to resolve user context");
+    return null;
+  }
 
   const headers = new Headers();
   headers.append("x-api-key", apiKey);
+  headers.append("Content-Type", "application/json");
 
   const request = await fetch("https://api.introw.io/api/v1/auth/session", {
-    body,
+    body: JSON.stringify({ email: userContext.email }),
     headers,
     method: "POST",
   });
@@ -46,7 +51,7 @@ export default async function IntrowPage() {
 
       <main className="app-main">
         {url ? (
-          <iframe src={url} className="h-full w-full" />
+          <iframe src={url} className="introw-frame" title="Introw" />
         ) : (
           <section className="coming-soon">
             <div>
