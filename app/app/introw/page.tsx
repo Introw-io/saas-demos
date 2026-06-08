@@ -15,7 +15,7 @@ async function getSessionUrl(): Promise<string | null> {
   const headers = new Headers();
   headers.append("x-api-key", apiKey);
 
-  const request = await fetch("https://app.introw.io/api/v1/auth/session", {
+  const request = await fetch("https://api.introw.io/api/v1/auth/session", {
     body,
     headers,
     method: "POST",
