@@ -17,19 +17,44 @@ CSS (no UI framework). Deployable to **Vercel** with zero configuration.
 
 ## Introw integrations
 
-### 1. Affiliate tracking (marketing signup)
+### 1. Affiliate conversions (marketing signup)
 
-The signup form submits to a Server Action ([`app/actions.ts`](app/actions.ts)),
-which validates the email and POSTs it server-side:
+Conversions are attributed to a signed, server-side click. The
+[`affiliate.js`](app/layout.tsx) snippet (installed in the root layout `<head>`)
+reads the `irw_id` query param from `/r/{code}` redirects, stores it in the
+first-party `_introw_aff` cookie (90-day, last-click window), and strips it from
+the URL. The signup form then records a conversion via **both** integration paths:
+
+**Server-to-server (Option B, recommended)** — the form submits to a Server Action
+([`app/actions.ts`](app/actions.ts)), which validates the email, reads the
+`_introw_aff` cookie, and POSTs it with the secret API key:
 
 ```
 POST https://api.introw.io/api/v1/affiliate/conversions
+x-api-key: $INTROW_API_KEY          # scope: affiliate:write
 Content-Type: application/json
 
-{ "email": "you@colony.com" }
+{ "clickId": "<_introw_aff cookie>", "email": "you@colony.com",
+  "properties": { "plan": "free", "source": "marketing-signup" } }
 ```
 
-This runs only on the server, returning friendly success/error messaging to the form.
+**Client-side (Option A)** — on success the form also calls
+`window.introw.affiliate.track(...)` (see [`app/lib/affiliate.ts`](app/lib/affiliate.ts))
+using the campaign publishable key. The snippet supplies the click id from the
+cookie automatically.
+
+Both paths anchor to the same click id, so Introw **deduplicates** — the second
+call resolves as `duplicate`. The endpoint is intentionally lenient and never
+surfaces errors on the page:
+
+| `status`    | HTTP  | Meaning                                          |
+| ----------- | ----- | ------------------------------------------------ |
+| `recorded`  | `201` | New conversion attributed; form submission made  |
+| `duplicate` | `200` | This click already converted                      |
+| `ignored`   | `200` | Click token missing, invalid, or expired          |
+
+> The `affiliate.js` tag is configured with `data-api-host="https://api.introw.io"`
+> — without it the snippet defaults to an internal host unreachable from browsers.
 
 ### 2. Embedded Partner Portal
 
@@ -53,12 +78,15 @@ full-screen iframe; any failure shows an on-brand error state.
 
 ## Environment variables
 
-| Variable          | Required | Used by                  | Description                                   |
-| ----------------- | -------- | ------------------------ | --------------------------------------------- |
-| `INTROW_API_KEY`  | Yes\*    | `/app/introw`            | Server-side API key for Introw auth sessions. |
+| Variable                             | Required | Used by                       | Description                                                                 |
+| ------------------------------------ | -------- | ----------------------------- | --------------------------------------------------------------------------- |
+| `INTROW_API_KEY`                     | Yes\*    | signup action, `/app/introw`  | Secret API key (`affiliate:write`) for server-side conversions + sessions.  |
+| `NEXT_PUBLIC_INTROW_PUBLISHABLE_KEY` | No       | `affiliate.js` (browser)      | Campaign publishable key (`pk_aff_...`) for the client-side conversion path. |
 
-\* Required for the Partner Portal page to load. Without it, `/app/introw` shows a
-friendly error instead of crashing.
+\* Required for the server-to-server conversion and the Partner Portal page.
+Without it, the signup shows a friendly error and `/app/introw` shows a friendly
+error instead of crashing. `NEXT_PUBLIC_INTROW_PUBLISHABLE_KEY` is optional — leave
+it empty to disable the client-side path; the server-to-server path still works.
 
 Set it locally by copying the example file and filling in your key:
 
