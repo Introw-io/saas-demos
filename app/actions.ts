@@ -60,7 +60,8 @@ export async function signup(
       body: JSON.stringify({
         clickId,
         email,
-        properties: { plan: "free", source: "marketing-signup" },
+        // Add metadata to the conversion
+        properties: { ikfexbkmwac5nko9lpk70ke8: email },
       }),
       cache: "no-store",
     });
